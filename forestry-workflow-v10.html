@@ -1,0 +1,2283 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nursery Supply Chain - Interactive Visualization v10 (Editable)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        body.light-mode {
+            background: #f5e6d3;
+            color: #1e293b;
+        }
+
+        #header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 44px;
+            background: linear-gradient(180deg, #1e293b 0%, rgba(30, 41, 59, 0.95) 100%);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 110;
+            backdrop-filter: blur(8px);
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        body.light-mode #header {
+            background: linear-gradient(180deg, #d9c9b0 0%, rgba(217, 201, 176, 0.95) 100%);
+            border-bottom: 1px solid rgba(30, 41, 59, 0.15);
+        }
+
+        #header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            transition: color 0.3s ease;
+        }
+
+        body.light-mode #header h1 {
+            color: #1e293b;
+        }
+
+        #header .subtitle {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-left: 12px;
+        }
+
+        body.light-mode #header .subtitle {
+            color: #64748b;
+        }
+
+        #header .controls {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .btn-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        /* Sun/Moon theme toggle */
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            cursor: pointer;
+            user-select: none;
+            font-size: 0.7rem;
+        }
+
+        .theme-toggle .icon {
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+
+        .theme-toggle input {
+            display: none;
+        }
+
+        .theme-toggle .slider {
+            width: 32px;
+            height: 16px;
+            background: #cbd5e1;
+            border-radius: 8px;
+            position: relative;
+            transition: background 0.3s ease;
+        }
+
+        .theme-toggle .slider::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+
+        .theme-toggle input:checked + .slider {
+            background: #475569;
+        }
+
+        .theme-toggle input:checked + .slider::after {
+            transform: translateX(16px);
+        }
+
+        .settings-icon {
+            font-size: 1.5rem;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+            line-height: 1;
+        }
+
+        .settings-icon:hover {
+            opacity: 1;
+        }
+
+        /* Custom tooltips */
+        [data-tip] {
+            position: relative;
+        }
+
+        [data-tip]::after {
+            content: attr(data-tip);
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 6px;
+            background: rgba(15, 23, 42, 0.95);
+            color: #e2e8f0;
+            font-size: 0.65rem;
+            font-weight: 400;
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            z-index: 300;
+        }
+
+        body.light-mode [data-tip]::after {
+            background: rgba(30, 41, 59, 0.95);
+            color: #f1f5f9;
+        }
+
+        [data-tip]:hover::after {
+            opacity: 1;
+        }
+
+        #header button {
+            background: #334155;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            color: #e2e8f0;
+            padding: 3px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.6rem;
+            transition: all 0.2s;
+        }
+
+        body.light-mode #header button {
+            background: #e8e4de;
+            border: 1px solid rgba(30, 41, 59, 0.2);
+            color: #1e293b;
+        }
+
+        #header button:hover {
+            background: #475569;
+            border-color: rgba(148, 163, 184, 0.3);
+        }
+
+        body.light-mode #header button:hover {
+            background: #d4d0c8;
+            border-color: rgba(30, 41, 59, 0.3);
+        }
+
+        #header button.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: #fff;
+        }
+
+        #header button.edit-active {
+            background: #f97316;
+            border-color: #f97316;
+            color: #fff;
+        }
+
+        #legend {
+            position: fixed;
+            top: 54px;
+            right: 16px;
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 8px;
+            padding: 8px 10px;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+            min-width: 140px;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        body.light-mode #legend {
+            background: rgba(217, 201, 176, 0.9);
+            border: 1px solid rgba(30, 41, 59, 0.15);
+        }
+
+        #legend h3 {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            margin-bottom: 6px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 5px;
+            font-size: 0.7rem;
+            color: #cbd5e1;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+            margin: 1px 0;
+        }
+
+        body.light-mode .legend-item {
+            color: #475569;
+        }
+
+        .legend-item:hover {
+            background: rgba(148, 163, 184, 0.1);
+        }
+
+        body.light-mode .legend-item:hover {
+            background: rgba(30, 41, 59, 0.1);
+        }
+
+        .legend-item.active {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+        }
+
+        body.light-mode .legend-item.active {
+            background: rgba(59, 130, 246, 0.2);
+            color: #2563eb;
+        }
+
+        .legend-item.dimmed {
+            opacity: 0.3;
+        }
+
+        .legend-color {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .legend-clear {
+            font-size: 0.6rem;
+            color: #64748b;
+            cursor: pointer;
+            text-align: center;
+            padding: 4px;
+            margin-top: 4px;
+            border-top: 1px solid rgba(148, 163, 184, 0.1);
+            transition: color 0.2s;
+        }
+
+        body.light-mode .legend-clear {
+            border-top: 1px solid rgba(30, 41, 59, 0.1);
+        }
+
+        .legend-clear:hover {
+            color: #94a3b8;
+        }
+
+        #sidepanel {
+            position: fixed;
+            top: 44px;
+            left: -320px;
+            width: 300px;
+            height: calc(100vh - 44px);
+            background: rgba(30, 41, 59, 0.98);
+            border-right: 1px solid rgba(148, 163, 184, 0.1);
+            z-index: 99;
+            backdrop-filter: blur(8px);
+            transition: left 0.3s ease, background 0.3s ease, border-color 0.3s ease;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        body.light-mode #sidepanel {
+            background: rgba(217, 201, 176, 0.98);
+            border-right: 1px solid rgba(30, 41, 59, 0.15);
+        }
+
+        #sidepanel.open {
+            left: 0;
+        }
+
+        #sidepanel .close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: #64748b;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        #sidepanel .close-btn:hover {
+            background: rgba(148, 163, 184, 0.1);
+            color: #94a3b8;
+        }
+
+        body.light-mode #sidepanel .close-btn:hover {
+            background: rgba(30, 41, 59, 0.1);
+            color: #475569;
+        }
+
+        #sidepanel h2 {
+            font-size: 1.125rem;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+            margin-right: 32px;
+            transition: color 0.3s ease;
+        }
+
+        body.light-mode #sidepanel h2 {
+            color: #1e293b;
+        }
+
+        #sidepanel .role-badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            color: white;
+            font-weight: 500;
+        }
+
+        #sidepanel .description {
+            color: #cbd5e1;
+            line-height: 1.5;
+            margin-bottom: 20px;
+            transition: color 0.3s ease;
+        }
+
+        body.light-mode #sidepanel .description {
+            color: #475569;
+        }
+
+        #sidepanel .section {
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        body.light-mode #sidepanel .section {
+            border-bottom: 1px solid rgba(30, 41, 59, 0.1);
+        }
+
+        #sidepanel .section:last-child {
+            border-bottom: none;
+        }
+
+        #sidepanel h3 {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        body.light-mode #sidepanel h3 {
+            color: #64748b;
+        }
+
+        #sidepanel .connection-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 4px 8px;
+            margin: 2px 0;
+            transition: all 0.2s;
+        }
+
+        body.light-mode #sidepanel .connection-item {
+            color: #475569;
+        }
+
+        #sidepanel .connection-item:hover {
+            background: rgba(148, 163, 184, 0.1);
+        }
+
+        body.light-mode #sidepanel .connection-item:hover {
+            background: rgba(30, 41, 59, 0.1);
+        }
+
+        #sidepanel .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        #sidepanel .resource-link {
+            display: block;
+            font-size: 0.8rem;
+            color: #60a5fa;
+            text-decoration: none;
+            padding: 6px 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        body.light-mode #sidepanel .resource-link {
+            color: #2563eb;
+        }
+
+        #sidepanel .resource-link:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: #93c5fd;
+        }
+
+        body.light-mode #sidepanel .resource-link:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: #1d4ed8;
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 6px;
+            padding: 4px 8px;
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        body.light-mode #controls {
+            background: rgba(217, 201, 176, 0.9);
+            border: 1px solid rgba(30, 41, 59, 0.15);
+        }
+
+        #controls button {
+            background: #334155;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            color: #e2e8f0;
+            padding: 2px 7px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.5rem;
+            transition: all 0.2s;
+            line-height: 1.2;
+        }
+
+        body.light-mode #controls button {
+            background: #e8e4de;
+            border: 1px solid rgba(30, 41, 59, 0.2);
+            color: #1e293b;
+        }
+
+        #controls button:hover {
+            background: #475569;
+            border-color: rgba(148, 163, 184, 0.3);
+        }
+
+        body.light-mode #controls button:hover {
+            background: #d4d0c8;
+            border-color: rgba(30, 41, 59, 0.3);
+        }
+
+        #controls .zoom-info {
+            display: flex;
+            align-items: center;
+            color: #64748b;
+            font-size: 0.45rem;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100vh;
+            padding-top: 44px;
+            transition: padding-left 0.3s ease;
+        }
+
+        #canvas.panel-open {
+            padding-left: 300px;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .node {
+            cursor: pointer;
+            transition: opacity 0.3s, transform 0.2s;
+        }
+
+        .node.dragging {
+            cursor: grabbing !important;
+        }
+
+        .node rect {
+            rx: 8;
+            ry: 8;
+            stroke-width: 2;
+            transition: all 0.3s;
+        }
+
+        .node:hover rect {
+            filter: brightness(1.2);
+        }
+
+        .node text {
+            font-size: 11px;
+            fill: #f8fafc;
+            text-anchor: middle;
+            pointer-events: none;
+            font-weight: 500;
+        }
+
+        body.light-mode .node text {
+            fill: #1e293b;
+        }
+
+        .node .role-badge {
+            font-size: 9px;
+            fill: rgba(248, 250, 252, 0.7);
+            font-weight: 400;
+        }
+
+        .link {
+            fill: none;
+            stroke-width: 2;
+            transition: opacity 0.3s, stroke-width 0.3s;
+            pointer-events: none;
+        }
+
+        .link.dimmed {
+            opacity: 0.1;
+        }
+
+        .link.highlighted {
+            stroke-width: 3;
+            opacity: 1;
+        }
+
+        .node.dimmed {
+            opacity: 0.15;
+        }
+
+        .node.role-filtered {
+            opacity: 0.2;
+        }
+
+        .node.highlighted rect {
+            stroke-width: 3;
+            filter: drop-shadow(0 0 8px currentColor);
+        }
+
+        .node.link-source rect {
+            stroke-width: 4;
+            stroke: #f97316 !important;
+            filter: drop-shadow(0 0 12px #f97316);
+        }
+
+        .phase-label {
+            font-size: 14px;
+            fill: #475569;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        #tooltip {
+            position: fixed;
+            background: rgba(15, 23, 42, 0.98);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 8px;
+            padding: 12px 16px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s, background 0.3s ease, border-color 0.3s ease;
+            z-index: 200;
+            max-width: 320px;
+            backdrop-filter: blur(8px);
+        }
+
+        body.light-mode #tooltip {
+            background: rgba(217, 201, 176, 0.98);
+            border: 1px solid rgba(30, 41, 59, 0.2);
+        }
+
+        #tooltip.visible {
+            opacity: 1;
+        }
+
+        #tooltip h4 {
+            font-size: 0.875rem;
+            color: #f1f5f9;
+            margin-bottom: 6px;
+        }
+
+        body.light-mode #tooltip h4 {
+            color: #1e293b;
+        }
+
+        #tooltip p {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+
+        body.light-mode #tooltip p {
+            color: #64748b;
+        }
+
+        #tooltip .role {
+            display: inline-block;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+            color: white;
+        }
+
+        .instructions {
+            position: fixed;
+            bottom: 52px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #64748b;
+            font-size: 0.6rem;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.3;
+        }
+
+        /* Settings panel styles */
+        #settings-panel {
+            position: fixed;
+            top: 44px;
+            right: -350px;
+            width: 330px;
+            height: calc(100vh - 44px);
+            background: rgba(30, 41, 59, 0.98);
+            border-left: 1px solid rgba(148, 163, 184, 0.1);
+            z-index: 101;
+            backdrop-filter: blur(8px);
+            transition: right 0.3s ease, background 0.3s ease, border-color 0.3s ease;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        body.light-mode #settings-panel {
+            background: rgba(217, 201, 176, 0.98);
+            border-left: 1px solid rgba(30, 41, 59, 0.15);
+        }
+
+        #settings-panel.open {
+            right: 0;
+        }
+
+        #settings-panel h2 {
+            color: #f1f5f9;
+            transition: color 0.3s ease;
+        }
+
+        body.light-mode #settings-panel h2 {
+            color: #1e293b;
+        }
+
+        .settings-section {
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        body.light-mode .settings-section {
+            border-bottom: 1px solid rgba(30, 41, 59, 0.1);
+        }
+
+        .settings-section h4 {
+            font-size: 0.875rem;
+            color: #f1f5f9;
+            margin-bottom: 12px;
+        }
+
+        body.light-mode .settings-section h4 {
+            color: #1e293b;
+        }
+
+        .setting-item {
+            margin-bottom: 12px;
+        }
+
+        .setting-item label {
+            display: block;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        body.light-mode .setting-item label {
+            color: #64748b;
+        }
+
+        .setting-item input, .setting-item select {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #e2e8f0;
+            font-size: 0.875rem;
+        }
+
+        body.light-mode .setting-item input, body.light-mode .setting-item select {
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(30, 41, 59, 0.2);
+            color: #1e293b;
+        }
+
+        .setting-item input:focus, .setting-item select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .color-option {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .color-option.selected {
+            border-color: #f1f5f9;
+            transform: scale(1.1);
+        }
+
+        .export-btn {
+            background: #10b981 !important;
+            border-color: #10b981 !important;
+            color: #fff !important;
+        }
+
+        .export-btn:hover {
+            background: #059669 !important;
+        }
+
+        .save-btn {
+            background: #8b5cf6 !important;
+            border-color: #8b5cf6 !important;
+            color: #fff !important;
+        }
+
+        .save-btn:hover {
+            background: #7c3aed !important;
+        }
+
+        /* Node edit modal */
+        #node-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 300;
+        }
+
+        #node-modal.visible {
+            display: flex;
+        }
+
+        #node-modal .modal-content {
+            background: #1e293b;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 12px;
+            padding: 24px;
+            width: 400px;
+            max-width: 90%;
+        }
+
+        body.light-mode #node-modal .modal-content {
+            background: #f5e6d3;
+            border: 1px solid rgba(30, 41, 59, 0.2);
+        }
+
+        #node-modal h3 {
+            color: #f1f5f9;
+            margin-bottom: 20px;
+            font-size: 1.125rem;
+        }
+
+        body.light-mode #node-modal h3 {
+            color: #1e293b;
+        }
+
+        #node-modal .form-group {
+            margin-bottom: 16px;
+        }
+
+        #node-modal label {
+            display: block;
+            color: #94a3b8;
+            font-size: 0.875rem;
+            margin-bottom: 6px;
+        }
+
+        body.light-mode #node-modal label {
+            color: #64748b;
+        }
+
+        #node-modal input,
+        #node-modal select,
+        #node-modal textarea {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: #e2e8f0;
+            font-size: 0.875rem;
+        }
+
+        body.light-mode #node-modal input,
+        body.light-mode #node-modal select,
+        body.light-mode #node-modal textarea {
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(30, 41, 59, 0.2);
+            color: #1e293b;
+        }
+
+        #node-modal textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        #node-modal .modal-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        #node-modal button {
+            flex: 1;
+            padding: 10px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        #node-modal .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        #node-modal .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        #node-modal .btn-secondary {
+            background: #475569;
+            color: #e2e8f0;
+        }
+
+        #node-modal .btn-secondary:hover {
+            background: #64748b;
+        }
+
+        #node-modal .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+
+        #node-modal .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        /* Resource rows in modal */
+        .resource-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .resource-row input {
+            flex: 1;
+        }
+
+        .resource-row .resource-text {
+            flex: 1.2;
+        }
+
+        .resource-row .resource-url {
+            flex: 1;
+        }
+
+        .btn-remove-resource {
+            flex: 0 0 auto !important;
+            width: 32px !important;
+            min-width: 32px;
+            padding: 6px !important;
+            background: rgba(220, 38, 38, 0.3) !important;
+            color: #f87171 !important;
+            border: 1px solid rgba(220, 38, 38, 0.4) !important;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            line-height: 1;
+            text-align: center;
+        }
+
+        .btn-remove-resource:hover {
+            background: rgba(220, 38, 38, 0.6) !important;
+        }
+
+        .btn-add-resource {
+            width: 100% !important;
+            padding: 8px !important;
+            background: transparent !important;
+            color: #94a3b8 !important;
+            border: 1px dashed rgba(148, 163, 184, 0.3) !important;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-top: 4px;
+        }
+
+        .btn-add-resource:hover {
+            background: rgba(148, 163, 184, 0.1) !important;
+            color: #e2e8f0 !important;
+        }
+
+        body.light-mode .btn-add-resource {
+            color: #64748b !important;
+            border-color: rgba(30, 41, 59, 0.2) !important;
+        }
+
+        body.light-mode .btn-add-resource:hover {
+            background: rgba(30, 41, 59, 0.05) !important;
+            color: #1e293b !important;
+        }
+
+        /* Edit mode indicator */
+        .edit-mode-indicator {
+            position: fixed;
+            top: 52px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #f97316;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            z-index: 150;
+            display: none;
+        }
+
+        .edit-mode-indicator.visible {
+            display: block;
+        }
+
+        /* Temporary link line */
+        .temp-link {
+            stroke: #f97316;
+            stroke-width: 3;
+            stroke-dasharray: 8,4;
+            fill: none;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="light-mode" style="cursor: default;">
+    <div id="header">
+        <div style="display: flex; align-items: baseline;">
+            <h1>Nursery Supply Chain Visualization</h1>
+            <span class="subtitle">Seedling Production Workflow (v10 Editable)</span>
+        </div>
+        <div class="controls">
+            <label class="theme-toggle">
+                <span class="icon">☀️</span>
+                <input type="checkbox" id="theme-checkbox" onchange="toggleLightDarkMode(true)">
+                <span class="slider"></span>
+                <span class="icon">🌙</span>
+            </label>
+            <div class="btn-stack">
+                <button onclick="toggleEditMode()" id="edit-btn" data-tip="Add, connect, or edit nodes (E)">Edit</button>
+                <button onclick="toggleDragMode()" id="drag-btn" data-tip="Drag nodes to reposition them (D)">Drag</button>
+            </div>
+            <div class="btn-stack">
+                <button onclick="saveToLocalStorage()" class="save-btn" data-tip="Save layout to browser storage (Ctrl+S)">Save</button>
+                <button onclick="exportAsHTML()" class="export-btn" data-tip="Download as a standalone HTML file">Export</button>
+            </div>
+            <span class="settings-icon" onclick="toggleSettings()" data-tip="Adjust node sizes, link opacity, and role colors">⚙</span>
+        </div>
+    </div>
+
+    <div class="edit-mode-indicator" id="edit-indicator">
+        EDIT MODE: Double-click to add node | Click node then another to connect | Right-click node to edit/delete
+    </div>
+
+    <!-- Enhanced Legend with Role Filtering -->
+    <div id="legend">
+        <h3>Supply Chain Roles</h3>
+        <div class="legend-item" data-role="Forest Operations">
+            <div class="legend-color" style="background: rgb(181, 26, 0);"></div>Forest Operations
+        </div>
+        <div class="legend-item" data-role="Nursery Staff">
+            <div class="legend-color" style="background: #3b82f6;"></div>Nursery Staff
+        </div>
+        <div class="legend-item" data-role="Quality Control">
+            <div class="legend-color" style="background: #8b5cf6;"></div>Quality Control
+        </div>
+        <div class="legend-item" data-role="Logistics">
+            <div class="legend-color" style="background: #f97316;"></div>Logistics
+        </div>
+        <div class="legend-item" data-role="Sales/External">
+            <div class="legend-color" style="background: #14b8a6;"></div>Sales/External
+        </div>
+        <div class="legend-item" data-role="Admin">
+            <div class="legend-color" style="background: #6b7280;"></div>Admin
+        </div>
+        <div class="legend-clear" onclick="clearRoleFilter()">Clear Filter</div>
+    </div>
+
+    <!-- Side Panel for Detailed Information -->
+    <div id="sidepanel">
+        <button class="close-btn" onclick="closeSidePanel()">×</button>
+        <div id="panel-content"></div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel">
+        <button class="close-btn" onclick="toggleSettings()">×</button>
+        <h2>Visualization Settings</h2>
+
+        <div class="settings-section">
+            <h4>Layout Controls</h4>
+            <div class="setting-item">
+                <label>Node Width</label>
+                <input type="range" id="node-width" min="80" max="200" value="130" oninput="updateNodeWidth(this.value)">
+            </div>
+            <div class="setting-item">
+                <label>Node Height</label>
+                <input type="range" id="node-height" min="30" max="80" value="40" oninput="updateNodeHeight(this.value)">
+            </div>
+            <div class="setting-item">
+                <label>Link Opacity</label>
+                <input type="range" id="link-opacity" min="0.1" max="1" step="0.1" value="0.4" oninput="updateLinkOpacity(this.value)">
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h4>Data Management</h4>
+            <div class="setting-item">
+                <button onclick="clearLocalStorage()" style="width: 100%; background: #dc2626; border-color: #dc2626; color: white;">Clear Saved Data</button>
+            </div>
+            <div class="setting-item">
+                <button onclick="loadFromLocalStorage()" style="width: 100%;">Reload Saved Data</button>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h4>Role Colors</h4>
+            <div id="role-color-settings"></div>
+        </div>
+    </div>
+
+    <!-- Node Edit Modal -->
+    <div id="node-modal">
+        <div class="modal-content">
+            <h3 id="modal-title">Edit Node</h3>
+            <div class="form-group">
+                <label for="node-name">Name</label>
+                <input type="text" id="node-name" placeholder="Node name">
+            </div>
+            <div class="form-group">
+                <label for="node-role">Role</label>
+                <select id="node-role">
+                    <option value="Forest Operations">Forest Operations</option>
+                    <option value="Nursery Staff">Nursery Staff</option>
+                    <option value="Quality Control">Quality Control</option>
+                    <option value="Logistics">Logistics</option>
+                    <option value="Sales/External">Sales/External</option>
+                    <option value="Admin">Admin</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="node-phase">Phase (1-6)</label>
+                <input type="number" id="node-phase" min="1" max="6" value="1">
+            </div>
+            <div class="form-group">
+                <label for="node-desc">Description</label>
+                <textarea id="node-desc" placeholder="Node description"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Additional Resources</label>
+                <div id="resource-rows"></div>
+                <button type="button" class="btn-add-resource" onclick="addResourceRow()">+ Add Resource</button>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeNodeModal()">Cancel</button>
+                <button class="btn-danger" id="delete-node-btn" onclick="deleteCurrentNode()">Delete</button>
+                <button class="btn-primary" onclick="saveNodeFromModal()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <button onclick="zoomIn()">Zoom In (+)</button>
+        <button onclick="zoomOut()">Zoom Out (-)</button>
+        <button onclick="resetView()">Reset View</button>
+        <button onclick="clearSelection()">Clear Selection</button>
+        <div class="zoom-info">Scroll to zoom | Drag to pan</div>
+    </div>
+
+    <div class="instructions">
+        Click activities to see connections and details | Click legend roles to filter | Use drag mode to reposition nodes |
+        Edit mode: double-click to add, click two nodes to connect, right-click to edit/delete
+    </div>
+
+    <div id="tooltip">
+        <h4></h4>
+        <p></p>
+        <span class="role"></span>
+    </div>
+
+    <div id="canvas" style="cursor: grab;"></div>
+
+    <script>
+        // Storage key for localStorage
+        const STORAGE_KEY = 'nursery-workflow-v10-data';
+
+        // State management
+        let isDragMode = false;
+        let isEditMode = false;
+        let selectedRole = null;
+        let selectedNode = null;
+        let linkSourceNode = null; // For creating connections
+        let isLightMode = true;
+        let editingNodeId = null; // For modal
+
+        // State variables
+        let nodeWidth = 130;
+        let nodeHeight = 40;
+        let linkOpacity = 0.4;
+
+        // Role colors
+        const roleColors = {
+            "Forest Operations": "#b51a00",
+            "Nursery Staff": "#3b82f6",
+            "Quality Control": "#8b5cf6",
+            "Logistics": "#f97316",
+            "Sales/External": "#14b8a6",
+            "Admin": "#6b7280"
+        };
+
+        // Fixed link color
+        const linkColor = '#6b7280';
+
+        // Default nodes data
+        const defaultNodes = [
+            { id: 1, name: "From Environment and Forestry", role: "Admin", phase: 1, x: -139, y: 50, desc: "Starting point - regulatory framework" },
+            { id: 2, name: "Land for Growing Trees", role: "Forest Operations", phase: 1, x: 108, y: 74, desc: "Identification and allocation of suitable land" },
+            { id: 3, name: "Plan the Harvest", role: "Forest Operations", phase: 1, x: 320, y: 80, desc: "Strategic planning for seed tree harvesting" },
+            { id: 4, name: "Forest Owners", role: "Sales/External", phase: 1, x: 55, y: 177, desc: "Private and public forest owners" },
+            { id: 5, name: "Neighbours and Community", role: "Sales/External", phase: 1, x: 60, y: 262, desc: "Community stakeholders" },
+            { id: 6, name: "Forestry Management Company", role: "Sales/External", phase: 1, x: 222, y: 263, desc: "Professional forestry companies" },
+            { id: 7, name: "CFIR", role: "Admin", phase: 1, x: 67, y: 340, desc: "Certification and regulatory compliance" },
+            { id: 8, name: "Regional Market Research", role: "Admin", phase: 1, x: 63, y: 476, desc: "Market analysis and research" },
+            { id: 9, name: "RBH SEIS-CF CRM", role: "Admin", phase: 1, x: 213, y: 531, desc: "Database and CRM system" },
+            { id: 10, name: "Forest Plan", role: "Admin", phase: 1, x: 215, y: 396, desc: "Comprehensive forest management plan" },
+            { id: 11, name: "Notify the Harvest", role: "Forest Operations", phase: 2, x: 413, y: 141, desc: "Formal notification of harvest activities" },
+            { id: 12, name: "Forest Feasibility Checks", role: "Forest Operations", phase: 2, x: 376, y: 320, desc: "Assessment of harvest viability" },
+            { id: 13, name: "Prepare the Seed", role: "Nursery Staff", phase: 2, x: 520, y: 80, desc: "Collection and processing of seeds" },
+            { id: 14, name: "Planting of Mother Trees", role: "Nursery Staff", phase: 2, x: 374, y: 219, desc: "Establishment of seed orchards" },
+            { id: 15, name: "Ready Seeds", role: "Nursery Staff", phase: 2, x: 705, y: 78, desc: "Seeds prepared for sowing" },
+            { id: 16, name: "Analyse and Prepare", role: "Quality Control", phase: 2, x: 538, y: 220, desc: "Seed testing and analysis" },
+            { id: 17, name: "Save Seeds for Next Season", role: "Nursery Staff", phase: 2, x: 472, y: 376, desc: "Proper storage of seeds" },
+            { id: 18, name: "Index Seedlings", role: "Admin", phase: 2, x: 472, y: 508, desc: "Database registration of seedlings" },
+            { id: 19, name: "Construction of Infrastructure", role: "Nursery Staff", phase: 3, x: 705, y: 190, desc: "Building nursery facilities" },
+            { id: 20, name: "Raise the Land", role: "Nursery Staff", phase: 3, x: 881, y: 78, desc: "Land preparation" },
+            { id: 21, name: "Sowing", role: "Nursery Staff", phase: 3, x: 740, y: 258, desc: "Planting seeds in nursery" },
+            { id: 22, name: "Mechanize", role: "Nursery Staff", phase: 3, x: 931, y: 281, desc: "Implementation of mechanical systems" },
+            { id: 23, name: "Clearing", role: "Nursery Staff", phase: 3, x: 937, y: 192, desc: "Removal of dead seedlings" },
+            { id: 24, name: "Weed", role: "Nursery Staff", phase: 3, x: 1068, y: 64, desc: "Weed control" },
+            { id: 25, name: "Land Owner/Contractor", role: "Sales/External", phase: 3, x: 917, y: 354, desc: "Landowners in nursery operations" },
+            { id: 26, name: "Soils and Chemicals", role: "Quality Control", phase: 3, x: 770, y: 391, desc: "Soil amendments and chemicals" },
+            { id: 27, name: "Nurseries", role: "Sales/External", phase: 3, x: 684, y: 546, desc: "Network of nursery facilities" },
+            { id: 28, name: "Chemical Treatment", role: "Quality Control", phase: 4, x: 1072, y: 228, desc: "Application of treatments" },
+            { id: 29, name: "Fertiliser and Growth Promoters", role: "Quality Control", phase: 4, x: 856, y: 475, desc: "Nutrient supplements" },
+            { id: 30, name: "Land Owner/Contractor 2", role: "Sales/External", phase: 4, x: 1073, y: 358, desc: "Secondary contractors" },
+            { id: 31, name: "Land Available for Planting", role: "Forest Operations", phase: 4, x: 1243, y: 72, desc: "Prepared planting sites" },
+            { id: 32, name: "Transport Seedlings", role: "Logistics", phase: 5, x: 1403, y: 123, desc: "Movement of seedlings" },
+            { id: 33, name: "Counter/Freight/Dispatch", role: "Logistics", phase: 5, x: 1235, y: 286, desc: "Dispatch operations" },
+            { id: 34, name: "Seedlings Ready", role: "Nursery Staff", phase: 5, x: 1237, y: 203, desc: "Seedlings prepared for distribution" },
+            { id: 35, name: "Packaging and Sorting", role: "Logistics", phase: 5, x: 1362, y: 388, desc: "Sorting seedlings" },
+            { id: 36, name: "Seedlings Emigration", role: "Logistics", phase: 5, x: 1358, y: 481, desc: "Export and movement" },
+            { id: 37, name: "Soils and Chemicals Machinery", role: "Quality Control", phase: 5, x: 1075, y: 476, desc: "Equipment for soil prep" },
+            { id: 38, name: "Plant Seedlings", role: "Forest Operations", phase: 6, x: 1626, y: 135, desc: "Field planting operations" },
+            { id: 39, name: "Seedlings Planted", role: "Forest Operations", phase: 6, x: 1696, y: 242, desc: "Completion of planting" },
+            { id: 40, name: "Post Planting Care", role: "Forest Operations", phase: 6, x: 1843, y: 195, desc: "Initial maintenance" },
+            { id: 41, name: "Landscapers/Contractors", role: "Sales/External", phase: 6, x: 1567, y: 307, desc: "Professional landscapers" },
+            { id: 42, name: "Free and Weed Control", role: "Forest Operations", phase: 6, x: 1781, y: 475, desc: "Vegetation management" },
+            { id: 43, name: "Established Seedlings", role: "Forest Operations", phase: 6, x: 1582, y: 383, desc: "Successfully established plants" },
+            { id: 44, name: "Blanking", role: "Forest Operations", phase: 6, x: 1598, y: 518, desc: "Replanting to fill gaps" },
+            { id: 45, name: "Technofarms", role: "Sales/External", phase: 6, x: 1730, y: 310, desc: "High-tech farming operations" }
+        ];
+
+        // Default links
+        const defaultLinks = [
+            { source: 1, target: 2 }, { source: 2, target: 3 }, { source: 4, target: 6 },
+            { source: 5, target: 6 }, { source: 6, target: 12 }, { source: 7, target: 10 },
+            { source: 8, target: 10 }, { source: 9, target: 10 }, { source: 10, target: 12 },
+            { source: 3, target: 11 }, { source: 3, target: 13 }, { source: 11, target: 13 },
+            { source: 12, target: 14 }, { source: 13, target: 15 }, { source: 14, target: 16 },
+            { source: 15, target: 16 }, { source: 16, target: 17 }, { source: 16, target: 19 },
+            { source: 17, target: 18 }, { source: 15, target: 19 }, { source: 15, target: 20 },
+            { source: 19, target: 20 }, { source: 20, target: 21 }, { source: 21, target: 22 },
+            { source: 22, target: 23 }, { source: 23, target: 24 }, { source: 25, target: 21 },
+            { source: 26, target: 21 }, { source: 27, target: 18 }, { source: 27, target: 19 },
+            { source: 24, target: 28 }, { source: 26, target: 29 }, { source: 25, target: 30 },
+            { source: 30, target: 31 }, { source: 28, target: 31 }, { source: 29, target: 37 },
+            { source: 28, target: 34 }, { source: 31, target: 32 }, { source: 34, target: 32 },
+            { source: 34, target: 33 }, { source: 32, target: 33 }, { source: 33, target: 35 },
+            { source: 35, target: 36 }, { source: 37, target: 38 }, { source: 33, target: 38 },
+            { source: 35, target: 38 }, { source: 36, target: 38 }, { source: 38, target: 39 },
+            { source: 39, target: 40 }, { source: 41, target: 38 }, { source: 40, target: 42 },
+            { source: 42, target: 43 }, { source: 43, target: 45 }, { source: 42, target: 44 },
+            { source: 44, target: 27 }, { source: 18, target: 27 }
+        ];
+
+        // Working data (will be loaded from localStorage or defaults)
+        let nodes = [];
+        let links = [];
+
+        // Phase labels
+        const phases = [
+            { name: 'Forest/Land Source', x: 140, y: 30 },
+            { name: 'Seed Preparation', x: 460, y: 30 },
+            { name: 'Nursery Growing', x: 800, y: 30 },
+            { name: 'Treatment', x: 1080, y: 30 },
+            { name: 'Distribution', x: 1320, y: 30 },
+            { name: 'Planting & End Use', x: 1600, y: 30 }
+        ];
+
+        // Node map and adjacency
+        let nodeMap = new Map();
+        let adjacency = new Map();
+
+        function rebuildMaps() {
+            nodeMap = new Map(nodes.map(n => [n.id, n]));
+            adjacency = new Map();
+            nodes.forEach(n => adjacency.set(n.id, new Set()));
+            links.forEach(l => {
+                if (adjacency.has(l.source) && adjacency.has(l.target)) {
+                    adjacency.get(l.source).add(l.target);
+                    adjacency.get(l.target).add(l.source);
+                }
+            });
+        }
+
+        // Smart text splitting for multi-line node labels
+        function splitTextSmart(text, maxLines = 3) {
+            const words = text.split(' ');
+            if (words.length === 1) {
+                if (text.length > 16) {
+                    return [text.substring(0, 14) + '...'];
+                }
+                return [text];
+            }
+            if (words.length === 2) {
+                return words;
+            }
+            const totalLength = text.length;
+            const targetLineLength = totalLength / Math.min(words.length, maxLines);
+            const lines = [];
+            let currentLine = '';
+            for (const word of words) {
+                if (lines.length >= maxLines - 1) {
+                    currentLine = currentLine ? currentLine + ' ' + word : word;
+                } else if (!currentLine) {
+                    currentLine = word;
+                } else if ((currentLine + ' ' + word).length <= targetLineLength + 4) {
+                    currentLine += ' ' + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            if (currentLine) {
+                if (currentLine.length > 16 && lines.length === maxLines - 1) {
+                    currentLine = currentLine.substring(0, 14) + '...';
+                }
+                lines.push(currentLine);
+            }
+            return lines;
+        }
+
+        // SVG Setup
+        const width = 1900;
+        const height = 600;
+
+        const svg = d3.select('#canvas')
+            .append('svg')
+            .attr('viewBox', `0 0 ${width} ${height}`)
+            .attr('preserveAspectRatio', 'xMidYMid meet');
+
+        const g = svg.append('g');
+
+        // Temporary link line for creating connections
+        const tempLinkLine = g.append('line')
+            .attr('class', 'temp-link')
+            .style('display', 'none');
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.3, 3])
+            .on('zoom', (event) => {
+                g.attr('transform', event.transform);
+            });
+
+        svg.call(zoom);
+        svg.on('dblclick.zoom', null);
+
+        // Click/double-click on background
+        svg.on('click', (event) => {
+            if (event.target === svg.node()) {
+                if (linkSourceNode) {
+                    // Cancel link creation
+                    cancelLinkCreation();
+                }
+                clearSelection();
+                closeSidePanel();
+            }
+        });
+
+        svg.on('dblclick', (event) => {
+            if (!isEditMode) return;
+            if (event.target !== svg.node()) return;
+            event.preventDefault();
+
+            // Get coordinates in SVG space
+            const transform = d3.zoomTransform(svg.node());
+            const pt = svg.node().createSVGPoint();
+            pt.x = event.clientX;
+            pt.y = event.clientY;
+            const svgP = pt.matrixTransform(svg.node().getScreenCTM().inverse());
+            const x = (svgP.x - transform.x) / transform.k;
+            const y = (svgP.y - transform.y) / transform.k;
+
+            // Create new node at click position
+            createNewNode(x, y);
+        });
+
+        // Mouse move for temp link line
+        svg.on('mousemove', (event) => {
+            if (!linkSourceNode) return;
+
+            const transform = d3.zoomTransform(svg.node());
+            const pt = svg.node().createSVGPoint();
+            pt.x = event.clientX;
+            pt.y = event.clientY;
+            const svgP = pt.matrixTransform(svg.node().getScreenCTM().inverse());
+            const x = (svgP.x - transform.x) / transform.k;
+            const y = (svgP.y - transform.y) / transform.k;
+
+            const sourceNode = nodeMap.get(linkSourceNode);
+            tempLinkLine
+                .attr('x1', sourceNode.x)
+                .attr('y1', sourceNode.y + nodeHeight / 2)
+                .attr('x2', x)
+                .attr('y2', y);
+        });
+
+        function initVisualization() {
+            // Clear existing
+            g.selectAll('.phase-label').remove();
+            g.selectAll('.phase-separator').remove();
+            g.selectAll('.link').remove();
+            g.selectAll('.node').remove();
+
+            // Draw phase labels
+            g.selectAll('.phase-label')
+                .data(phases)
+                .enter()
+                .append('text')
+                .attr('class', 'phase-label')
+                .attr('x', d => d.x)
+                .attr('y', d => d.y)
+                .text(d => d.name);
+
+            // Draw phase separator lines
+            const phaseSeparators = [290, 580, 1000, 1160, 1480];
+            g.selectAll('.phase-separator')
+                .data(phaseSeparators)
+                .enter()
+                .append('line')
+                .attr('class', 'phase-separator')
+                .attr('x1', d => d)
+                .attr('y1', 50)
+                .attr('x2', d => d)
+                .attr('y2', height - 20)
+                .attr('stroke', '#1e293b')
+                .attr('stroke-width', 2)
+                .attr('stroke-dasharray', '5,5');
+
+            drawLinks();
+            drawNodes();
+        }
+
+        function calculateOptimalAnchors(sourceNode, targetNode) {
+            const sides = ['top', 'bottom', 'left', 'right'];
+            let minDistance = Infinity;
+            let bestAnchors = { source: 'right', target: 'left' };
+
+            for (const sourceSide of sides) {
+                for (const targetSide of sides) {
+                    const sourcePoint = getAnchorPoint(sourceNode, sourceSide, nodeWidth, nodeHeight);
+                    const targetPoint = getAnchorPoint(targetNode, targetSide, nodeWidth, nodeHeight);
+                    const distance = Math.hypot(targetPoint.x - sourcePoint.x, targetPoint.y - sourcePoint.y);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        bestAnchors = { source: sourceSide, target: targetSide };
+                    }
+                }
+            }
+            return bestAnchors;
+        }
+
+        function getAnchorPoint(node, anchor, nodeWidth, nodeHeight) {
+            const centerX = node.x;
+            const topY = node.y;
+            const centerY = node.y + nodeHeight / 2;
+            const bottomY = node.y + nodeHeight;
+
+            switch(anchor) {
+                case 'top': return { x: centerX, y: topY };
+                case 'bottom': return { x: centerX, y: bottomY };
+                case 'left': return { x: centerX - nodeWidth/2, y: centerY };
+                case 'right': return { x: centerX + nodeWidth/2, y: centerY };
+                default: return { x: centerX + nodeWidth/2, y: centerY };
+            }
+        }
+
+        function getControlPoints(sourcePoint, targetPoint, sourceAnchor, targetAnchor) {
+            const dx = targetPoint.x - sourcePoint.x;
+            const dy = targetPoint.y - sourcePoint.y;
+            let cp1x, cp1y, cp2x, cp2y;
+            const baseOffset = Math.min(Math.abs(dx) * 0.4, Math.abs(dy) * 0.4, 120);
+            const offset = Math.max(baseOffset, 30);
+
+            switch(sourceAnchor) {
+                case 'top': cp1x = sourcePoint.x; cp1y = sourcePoint.y - offset; break;
+                case 'bottom': cp1x = sourcePoint.x; cp1y = sourcePoint.y + offset; break;
+                case 'left': cp1x = sourcePoint.x - offset; cp1y = sourcePoint.y; break;
+                default: cp1x = sourcePoint.x + offset; cp1y = sourcePoint.y; break;
+            }
+
+            switch(targetAnchor) {
+                case 'top': cp2x = targetPoint.x; cp2y = targetPoint.y - offset; break;
+                case 'bottom': cp2x = targetPoint.x; cp2y = targetPoint.y + offset; break;
+                case 'left': cp2x = targetPoint.x - offset; cp2y = targetPoint.y; break;
+                default: cp2x = targetPoint.x + offset; cp2y = targetPoint.y; break;
+            }
+
+            return { cp1x, cp1y, cp2x, cp2y };
+        }
+
+        function createBezierPath(d) {
+            const source = nodeMap.get(d.source);
+            const target = nodeMap.get(d.target);
+            if (!source || !target) return '';
+
+            const { source: sourceAnchor, target: targetAnchor } = calculateOptimalAnchors(source, target);
+            const sourcePoint = getAnchorPoint(source, sourceAnchor, nodeWidth, nodeHeight);
+            const targetPoint = getAnchorPoint(target, targetAnchor, nodeWidth, nodeHeight);
+            const { cp1x, cp1y, cp2x, cp2y } = getControlPoints(sourcePoint, targetPoint, sourceAnchor, targetAnchor);
+
+            return `M ${sourcePoint.x},${sourcePoint.y} C ${cp1x},${cp1y} ${cp2x},${cp2y} ${targetPoint.x},${targetPoint.y}`;
+        }
+
+        function drawLinks() {
+            const linkElements = g.selectAll('.link')
+                .data(links, d => `${d.source}-${d.target}`)
+                .join('path')
+                .attr('class', 'link')
+                .attr('d', createBezierPath)
+                .attr('stroke', linkColor)
+                .attr('opacity', linkOpacity);
+
+            window.linkElements = linkElements;
+        }
+
+        function drawNodes() {
+            const nodeElements = g.selectAll('.node')
+                .data(nodes, d => d.id)
+                .join('g')
+                .attr('class', 'node')
+                .attr('transform', d => `translate(${d.x - nodeWidth/2}, ${d.y})`)
+                .on('click', handleNodeClick)
+                .on('contextmenu', handleNodeRightClick)
+                .on('mouseenter', handleNodeHover)
+                .on('mouseleave', handleNodeLeave);
+
+            // Drag behavior
+            const drag = d3.drag()
+                .on('start', function(event, d) {
+                    if (isDragMode) {
+                        d3.select(this).classed('dragging', true);
+                        d3.select('body').style('cursor', 'grabbing');
+                    }
+                })
+                .on('drag', function(event, d) {
+                    if (isDragMode) {
+                        d.x = event.x;
+                        d.y = event.y;
+                        d3.select(this).attr('transform', `translate(${d.x - nodeWidth/2}, ${d.y})`);
+                        window.linkElements.attr('d', createBezierPath);
+                    }
+                })
+                .on('end', function(event, d) {
+                    if (isDragMode) {
+                        d3.select(this).classed('dragging', false);
+                        d3.select('body').style('cursor', 'default');
+                    }
+                });
+
+            nodeElements.call(drag);
+
+            // Remove old rects/text
+            nodeElements.selectAll('rect').remove();
+            nodeElements.selectAll('text').remove();
+
+            nodeElements.append('rect')
+                .attr('width', nodeWidth)
+                .attr('height', nodeHeight)
+                .attr('fill', d => {
+                    const color = roleColors[d.role] || '#64748b';
+                    return color + '33';
+                })
+                .attr('stroke', d => roleColors[d.role] || '#64748b');
+
+            const textElements = nodeElements.append('text')
+                .attr('x', nodeWidth / 2);
+
+            textElements.each(function(d) {
+                const lines = splitTextSmart(d.name, 3);
+                const lineCount = lines.length;
+                const startY = lineCount === 1 ? 22 : (lineCount === 2 ? 14 : 10);
+                const lineHeight = 12;
+
+                const el = d3.select(this);
+                lines.forEach((line, i) => {
+                    el.append('tspan')
+                        .attr('x', nodeWidth / 2)
+                        .attr('y', startY + i * lineHeight)
+                        .text(line);
+                });
+            });
+
+            window.nodeElements = nodeElements;
+        }
+
+        // ==================== EDIT MODE FUNCTIONS ====================
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            const btn = document.getElementById('edit-btn');
+            const indicator = document.getElementById('edit-indicator');
+
+            if (isEditMode) {
+                btn.textContent = 'Exit Edit';
+                btn.classList.add('edit-active');
+                indicator.classList.add('visible');
+                // Disable drag mode when entering edit mode
+                if (isDragMode) {
+                    toggleDragMode();
+                }
+            } else {
+                btn.textContent = 'Edit';
+                btn.classList.remove('edit-active');
+                indicator.classList.remove('visible');
+                cancelLinkCreation();
+            }
+        }
+
+        function createNewNode(x, y) {
+            // Generate new ID
+            const maxId = nodes.reduce((max, n) => Math.max(max, n.id), 0);
+            const newId = maxId + 1;
+
+            const newNode = {
+                id: newId,
+                name: 'New Node',
+                role: 'Admin',
+                phase: 1,
+                x: x,
+                y: y,
+                desc: 'New node description',
+                resources: []
+            };
+
+            nodes.push(newNode);
+            rebuildMaps();
+            drawNodes();
+
+            // Open edit modal for the new node
+            editingNodeId = newId;
+            openNodeModal(newNode, true);
+        }
+
+        function addResourceRow(text = '', url = '') {
+            const container = document.getElementById('resource-rows');
+            const row = document.createElement('div');
+            row.className = 'resource-row';
+            row.innerHTML = `
+                <input type="text" placeholder="Display text" class="resource-text" value="${text.replace(/"/g, '&quot;')}">
+                <input type="text" placeholder="Link (URL or file path)" class="resource-url" value="${url.replace(/"/g, '&quot;')}">
+                <button type="button" class="btn-remove-resource" onclick="this.parentElement.remove()">&#10005;</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function populateResourceRows(resources) {
+            const container = document.getElementById('resource-rows');
+            container.innerHTML = '';
+            resources.forEach(r => {
+                if (typeof r === 'string') {
+                    addResourceRow(r, '');
+                } else {
+                    addResourceRow(r.text || '', r.url || '');
+                }
+            });
+        }
+
+        function openNodeModal(nodeData, isNew = false) {
+            document.getElementById('modal-title').textContent = isNew ? 'Add New Node' : 'Edit Node';
+            document.getElementById('node-name').value = nodeData.name;
+            document.getElementById('node-role').value = nodeData.role;
+            document.getElementById('node-phase').value = nodeData.phase;
+            document.getElementById('node-desc').value = nodeData.desc;
+            populateResourceRows(nodeData.resources || []);
+            document.getElementById('delete-node-btn').style.display = isNew ? 'none' : 'block';
+            document.getElementById('node-modal').classList.add('visible');
+        }
+
+        function closeNodeModal() {
+            document.getElementById('node-modal').classList.remove('visible');
+            editingNodeId = null;
+        }
+
+        function saveNodeFromModal() {
+            if (editingNodeId === null) return;
+
+            const node = nodeMap.get(editingNodeId);
+            if (!node) return;
+
+            node.name = document.getElementById('node-name').value || 'Unnamed';
+            node.role = document.getElementById('node-role').value;
+            node.phase = parseInt(document.getElementById('node-phase').value) || 1;
+            node.desc = document.getElementById('node-desc').value || '';
+            node.resources = Array.from(document.querySelectorAll('.resource-row')).map(row => ({
+                text: row.querySelector('.resource-text').value.trim(),
+                url: row.querySelector('.resource-url').value.trim()
+            })).filter(r => r.text || r.url);
+
+            rebuildMaps();
+            drawNodes();
+            drawLinks();
+            closeNodeModal();
+        }
+
+        function deleteCurrentNode() {
+            if (editingNodeId === null) return;
+
+            // Remove all links involving this node
+            links = links.filter(l => l.source !== editingNodeId && l.target !== editingNodeId);
+
+            // Remove the node
+            nodes = nodes.filter(n => n.id !== editingNodeId);
+
+            rebuildMaps();
+            drawNodes();
+            drawLinks();
+            closeNodeModal();
+            clearSelection();
+            closeSidePanel();
+        }
+
+        function handleNodeRightClick(event, d) {
+            event.preventDefault();
+            if (!isEditMode) return;
+
+            editingNodeId = d.id;
+            openNodeModal(d, false);
+        }
+
+        function startLinkCreation(nodeId) {
+            linkSourceNode = nodeId;
+            tempLinkLine
+                .style('display', 'block')
+                .attr('x1', nodeMap.get(nodeId).x)
+                .attr('y1', nodeMap.get(nodeId).y + nodeHeight / 2)
+                .attr('x2', nodeMap.get(nodeId).x)
+                .attr('y2', nodeMap.get(nodeId).y + nodeHeight / 2);
+
+            // Highlight source node
+            window.nodeElements.classed('link-source', n => n.id === nodeId);
+        }
+
+        function cancelLinkCreation() {
+            linkSourceNode = null;
+            tempLinkLine.style('display', 'none');
+            window.nodeElements.classed('link-source', false);
+        }
+
+        function completeLinkCreation(targetId) {
+            if (linkSourceNode === targetId) {
+                cancelLinkCreation();
+                return;
+            }
+
+            // Check if link already exists
+            const exists = links.some(l =>
+                (l.source === linkSourceNode && l.target === targetId) ||
+                (l.source === targetId && l.target === linkSourceNode)
+            );
+
+            if (!exists) {
+                links.push({ source: linkSourceNode, target: targetId });
+                rebuildMaps();
+                drawLinks();
+            }
+
+            cancelLinkCreation();
+        }
+
+        // ==================== LOCALSTORAGE FUNCTIONS ====================
+
+        function saveToLocalStorage() {
+            const data = {
+                nodes: nodes,
+                links: links,
+                settings: {
+                    nodeWidth,
+                    nodeHeight,
+                    linkOpacity,
+                    isLightMode,
+                    roleColors: { ...roleColors }
+                }
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            alert('Data saved to browser storage!');
+        }
+
+        function loadFromLocalStorage() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                try {
+                    const data = JSON.parse(stored);
+                    nodes = data.nodes || [...defaultNodes];
+                    links = data.links || [...defaultLinks];
+
+                    if (data.settings) {
+                        nodeWidth = data.settings.nodeWidth || 130;
+                        nodeHeight = data.settings.nodeHeight || 40;
+                        linkOpacity = data.settings.linkOpacity || 0.4;
+                        isLightMode = data.settings.isLightMode || false;
+
+                        if (data.settings.roleColors) {
+                            Object.assign(roleColors, data.settings.roleColors);
+                        }
+                    }
+
+                    rebuildMaps();
+                    initVisualization();
+                    applySettings();
+                    console.log('Loaded from localStorage');
+                    return true;
+                } catch (e) {
+                    console.error('Failed to load from localStorage:', e);
+                }
+            }
+            return false;
+        }
+
+        function clearLocalStorage() {
+            if (confirm('This will delete all saved data. Are you sure?')) {
+                localStorage.removeItem(STORAGE_KEY);
+                nodes = JSON.parse(JSON.stringify(defaultNodes));
+                links = JSON.parse(JSON.stringify(defaultLinks));
+                rebuildMaps();
+                initVisualization();
+                alert('Saved data cleared. Using defaults.');
+            }
+        }
+
+        function applySettings() {
+            document.getElementById('node-width').value = nodeWidth;
+            document.getElementById('node-height').value = nodeHeight;
+            document.getElementById('link-opacity').value = linkOpacity;
+
+            const checkbox = document.getElementById('theme-checkbox');
+            if (isLightMode) {
+                document.body.classList.add('light-mode');
+                checkbox.checked = false;
+            } else {
+                document.body.classList.remove('light-mode');
+                checkbox.checked = true;
+            }
+
+            // Update legend colors
+            Object.keys(roleColors).forEach(role => {
+                const legendItem = document.querySelector(`[data-role="${role}"] .legend-color`);
+                if (legendItem) {
+                    legendItem.style.background = roleColors[role];
+                }
+            });
+        }
+
+        // ==================== LEGEND AND FILTERING ====================
+
+        function setupLegend() {
+            document.querySelectorAll('.legend-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const role = this.getAttribute('data-role');
+                    toggleRoleFilter(role);
+                });
+            });
+        }
+
+        function toggleRoleFilter(role) {
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            if (selectedRole === role) {
+                selectedRole = null;
+                legendItems.forEach(item => {
+                    item.classList.remove('active', 'dimmed');
+                });
+                window.nodeElements.classed('role-filtered', false);
+                window.linkElements.attr('opacity', linkOpacity);
+            } else {
+                selectedRole = role;
+                legendItems.forEach(item => {
+                    const itemRole = item.getAttribute('data-role');
+                    if (itemRole === role) {
+                        item.classList.add('active');
+                        item.classList.remove('dimmed');
+                    } else {
+                        item.classList.remove('active');
+                        item.classList.add('dimmed');
+                    }
+                });
+
+                window.nodeElements.classed('role-filtered', d => d.role !== role);
+                window.linkElements.attr('opacity', d => {
+                    const sourceNode = nodeMap.get(d.source);
+                    const targetNode = nodeMap.get(d.target);
+                    return (sourceNode && sourceNode.role === role) || (targetNode && targetNode.role === role) ? 0.8 : 0.1;
+                });
+            }
+        }
+
+        function clearRoleFilter() {
+            selectedRole = null;
+            document.querySelectorAll('.legend-item').forEach(item => {
+                item.classList.remove('active', 'dimmed');
+            });
+            window.nodeElements.classed('role-filtered', false);
+            window.linkElements.attr('opacity', linkOpacity);
+        }
+
+        // ==================== SIDE PANEL ====================
+
+        function showSidePanel(nodeData) {
+            const panel = document.getElementById('sidepanel');
+            const content = document.getElementById('panel-content');
+
+            const connected = adjacency.get(nodeData.id) || new Set();
+            const connectedNodes = Array.from(connected).map(id => nodeMap.get(id)).filter(Boolean);
+
+            const resources = nodeData.resources || [];
+
+            content.innerHTML = `
+                <h2>${nodeData.name}</h2>
+                <span class="role-badge" style="background: ${roleColors[nodeData.role]}">${nodeData.role}</span>
+                <p class="description">${nodeData.desc}</p>
+
+                <div class="section">
+                    <h3>Connected Activities (${connectedNodes.length})</h3>
+                    ${connectedNodes.map(node => `
+                        <div class="connection-item" onclick="highlightNode(${node.id})">
+                            <div class="connection-dot" style="background: ${roleColors[node.role]}"></div>
+                            <span>${node.name}</span>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="section">
+                    <h3>Phase Information</h3>
+                    <p>Phase ${nodeData.phase}: ${phases[nodeData.phase - 1]?.name || 'Unknown'}</p>
+                </div>
+
+                ${resources.length > 0 ? `<div class="section">
+                    <h3>Additional Resources</h3>
+                    ${resources.map(r => {
+                        if (typeof r === 'object' && r.text) {
+                            if (r.url) {
+                                const href = r.url.match(/^https?:\/\/|^file:\/\//) ? r.url : 'https://' + r.url;
+                                return `<a href="${href}" class="resource-link" target="_blank" rel="noopener">&bull; ${r.text}</a>`;
+                            }
+                            return `<span class="resource-link">&bull; ${r.text}</span>`;
+                        }
+                        const label = typeof r === 'string' ? r : (r.text || r.url || '');
+                        return `<span class="resource-link">&bull; ${label}</span>`;
+                    }).join('')}
+                </div>` : ''}
+            `;
+
+            panel.classList.add('open');
+            document.getElementById('canvas').classList.add('panel-open');
+        }
+
+        function closeSidePanel() {
+            document.getElementById('sidepanel').classList.remove('open');
+            document.getElementById('canvas').classList.remove('panel-open');
+        }
+
+        function highlightNode(nodeId) {
+            const nodeData = nodeMap.get(nodeId);
+            if (nodeData) handleNodeClick(null, nodeData);
+        }
+
+        // ==================== NODE INTERACTION ====================
+
+        function handleNodeClick(event, d) {
+            if (event) event.stopPropagation();
+
+            // In edit mode with link creation active
+            if (isEditMode && linkSourceNode) {
+                completeLinkCreation(d.id);
+                return;
+            }
+
+            // In edit mode, start link creation
+            if (isEditMode && !linkSourceNode) {
+                startLinkCreation(d.id);
+                return;
+            }
+
+            if (isDragMode) return;
+
+            if (selectedNode === d.id) {
+                clearSelection();
+                closeSidePanel();
+                return;
+            }
+
+            selectedNode = d.id;
+            const connected = adjacency.get(d.id) || new Set();
+
+            window.nodeElements
+                .classed('dimmed', n => n.id !== d.id && !connected.has(n.id))
+                .classed('highlighted', n => n.id === d.id);
+
+            window.linkElements
+                .classed('dimmed', l => l.source !== d.id && l.target !== d.id)
+                .classed('highlighted', l => l.source === d.id || l.target === d.id);
+
+            showSidePanel(d);
+        }
+
+        const tooltip = d3.select('#tooltip');
+
+        function handleNodeHover(event, d) {
+            if (isDragMode || isEditMode) return;
+
+            tooltip.select('h4').text(d.name);
+            tooltip.select('p').text(d.desc);
+            tooltip.select('.role')
+                .text(d.role)
+                .style('background', roleColors[d.role]);
+
+            tooltip
+                .style('left', (event.pageX + 15) + 'px')
+                .style('top', (event.pageY - 10) + 'px')
+                .classed('visible', true);
+        }
+
+        function handleNodeLeave() {
+            tooltip.classed('visible', false);
+        }
+
+        // ==================== MODE TOGGLES ====================
+
+        function toggleDragMode() {
+            isDragMode = !isDragMode;
+            const btn = document.getElementById('drag-btn');
+
+            if (isDragMode) {
+                btn.textContent = 'Lock';
+                btn.classList.add('active');
+                document.getElementById('canvas').style.cursor = 'grab';
+                if (isEditMode) toggleEditMode();
+            } else {
+                btn.textContent = 'Drag';
+                btn.classList.remove('active');
+                document.getElementById('canvas').style.cursor = 'default';
+            }
+        }
+
+        function toggleLightDarkMode(fromCheckbox) {
+            const checkbox = document.getElementById('theme-checkbox');
+            if (!fromCheckbox) {
+                checkbox.checked = !checkbox.checked;
+            }
+            isLightMode = !checkbox.checked;
+
+            if (isLightMode) {
+                document.body.classList.add('light-mode');
+            } else {
+                document.body.classList.remove('light-mode');
+            }
+        }
+
+        // ==================== SETTINGS ====================
+
+        function toggleSettings() {
+            const panel = document.getElementById('settings-panel');
+            panel.classList.toggle('open');
+            if (panel.classList.contains('open')) {
+                populateRoleColorSettings();
+            }
+        }
+
+        function populateRoleColorSettings() {
+            const container = document.getElementById('role-color-settings');
+            container.innerHTML = '';
+            Object.keys(roleColors).forEach(role => {
+                const div = document.createElement('div');
+                div.className = 'setting-item';
+                div.innerHTML = `
+                    <label>${role}</label>
+                    <input type="color" value="${roleColors[role]}" onchange="updateRoleColor('${role}', this.value)">
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function updateRoleColor(role, color) {
+            roleColors[role] = color;
+            const legendEl = document.querySelector(`[data-role="${role}"] .legend-color`);
+            if (legendEl) legendEl.style.background = color;
+
+            window.nodeElements.selectAll('rect')
+                .attr('fill', d => (roleColors[d.role] || '#64748b') + '33')
+                .attr('stroke', d => roleColors[d.role] || '#64748b');
+        }
+
+        function updateNodeWidth(value) {
+            nodeWidth = parseInt(value);
+            window.nodeElements.select('rect').attr('width', nodeWidth);
+            window.nodeElements.selectAll('text').attr('x', nodeWidth / 2);
+            window.nodeElements.selectAll('tspan').attr('x', nodeWidth / 2);
+            window.nodeElements.attr('transform', d => `translate(${d.x - nodeWidth/2}, ${d.y})`);
+            window.linkElements.attr('d', createBezierPath);
+        }
+
+        function updateNodeHeight(value) {
+            nodeHeight = parseInt(value);
+            window.nodeElements.select('rect').attr('height', nodeHeight);
+            window.linkElements.attr('d', createBezierPath);
+        }
+
+        function updateLinkOpacity(value) {
+            linkOpacity = parseFloat(value);
+            window.linkElements.attr('opacity', linkOpacity);
+        }
+
+        function clearSelection() {
+            selectedNode = null;
+            if (window.nodeElements) {
+                window.nodeElements.classed('dimmed', false).classed('highlighted', false);
+                window.linkElements.classed('dimmed', false).classed('highlighted', false);
+            }
+        }
+
+        // ==================== EXPORT ====================
+
+        function collectCurrentState() {
+            return {
+                nodeWidth,
+                nodeHeight,
+                linkOpacity,
+                isLightMode,
+                roleColors: { ...roleColors },
+                nodes: nodes.map(n => ({
+                    id: n.id, name: n.name, role: n.role,
+                    phase: n.phase, x: n.x, y: n.y, desc: n.desc,
+                    resources: n.resources || []
+                })),
+                links: links.map(l => ({ source: l.source, target: l.target }))
+            };
+        }
+
+        async function exportAsHTML() {
+            try {
+                const state = collectCurrentState();
+                let html;
+
+                // Try fetch first (works when served from a web server)
+                try {
+                    const response = await fetch(window.location.href);
+                    if (response.ok) {
+                        html = await response.text();
+                    }
+                } catch (e) {}
+
+                // Fallback: get HTML from DOM (works with file:// protocol)
+                if (!html) {
+                    const canvas = document.getElementById('canvas');
+                    const savedContent = canvas.innerHTML;
+                    canvas.innerHTML = '';
+                    html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+                    canvas.innerHTML = savedContent;
+                }
+
+                // Replace state markers
+                html = html.replace(/const defaultNodes = \[[\s\S]*?\];/,
+                    `const defaultNodes = ${JSON.stringify(state.nodes, null, 4)};`);
+                html = html.replace(/const defaultLinks = \[[\s\S]*?\];/,
+                    `const defaultLinks = ${JSON.stringify(state.links, null, 4)};`);
+
+                const date = new Date();
+                const dateStr = date.toISOString().split('T')[0];
+                const filename = `nursery-supply-chain-${dateStr}.html`;
+
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                console.log('Exported:', filename);
+            } catch (error) {
+                console.error('Export failed:', error);
+                alert('Export failed: ' + error.message);
+            }
+        }
+
+        // ==================== ZOOM ====================
+
+        function zoomIn() {
+            svg.transition().duration(300).call(zoom.scaleBy, 1.3);
+        }
+
+        function zoomOut() {
+            svg.transition().duration(300).call(zoom.scaleBy, 0.7);
+        }
+
+        function resetView() {
+            svg.transition().duration(500).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(50, 50).scale(0.85)
+            );
+        }
+
+        // ==================== INITIALIZATION ====================
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Try to load from localStorage first
+            if (!loadFromLocalStorage()) {
+                // Use defaults
+                nodes = JSON.parse(JSON.stringify(defaultNodes));
+                links = JSON.parse(JSON.stringify(defaultLinks));
+                rebuildMaps();
+                initVisualization();
+            }
+
+            setupLegend();
+            svg.call(zoom.transform, d3.zoomIdentity.translate(50, 50).scale(0.8));
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            if (e.key === 'Escape') {
+                if (linkSourceNode) {
+                    cancelLinkCreation();
+                } else if (document.getElementById('node-modal').classList.contains('visible')) {
+                    closeNodeModal();
+                } else {
+                    clearSelection();
+                    closeSidePanel();
+                }
+            }
+            if (e.key === '+' || e.key === '=') zoomIn();
+            if (e.key === '-') zoomOut();
+            if (e.key === '0') resetView();
+            if (e.key === 'd' || e.key === 'D') toggleDragMode();
+            if (e.key === 'l' || e.key === 'L') toggleLightDarkMode();
+            if (e.key === 'e' || e.key === 'E') toggleEditMode();
+            if ((e.key === 's' || e.key === 'S') && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                saveToLocalStorage();
+            }
+        });
+    </script>
+</body></html>
